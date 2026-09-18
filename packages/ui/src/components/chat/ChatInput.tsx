@@ -2354,9 +2354,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         // Ctrl/Cmd+Enter that the submit policy declines (Send-with-Enter
         // mode) must still insert a newline: CodeMirror binds Shift+Enter
         // explicitly but has no Mod-Enter binding, so without this the key
-        // would do nothing (#3614). The dispatch syncs state through onChange
-        // exactly like the Shift+Enter path.
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        // would do nothing (#3614). Shift is deliberately not excluded, so
+        // Shift+Ctrl+Enter inserts a newline instead of becoming a dead key.
+        // The dispatch syncs state through onChange exactly like the
+        // Shift+Enter path.
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             composerRef.current?.insertText('\n');
             return;
