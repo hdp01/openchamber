@@ -2302,6 +2302,7 @@ export const dict = {
   'chat.btw.working': 'Bezig…',
   'chat.btw.collapseAria': 'Het btw-paneel inklappen',
   'chat.btw.draftHint': 'Stel uw vraag',
+  'chat.btw.toolbar.askAria': 'Stel een tijdelijke vraag (/btw)',
   'chat.btw.cancelAria': 'Deze BTW-vraag annuleren',
   'chat.btw.expandAria': 'Het btw-paneel uitklappen',
   'chat.btw.promoteAria': 'Als aparte sessie behouden',

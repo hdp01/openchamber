@@ -14,6 +14,7 @@
 import React from 'react';
 
 import { SessionGoalButton, SessionGoalObjectiveCounter } from '@/components/chat/SessionGoalButton';
+import { BtwToolbarButton } from '@/components/chat/BtwToolbarButton';
 import { ComposerDictation } from '@/components/dictation/ComposerDictation';
 import { Icon } from '@/components/icon/Icon';
 import type { GuestAttachItem } from '@/hooks/useGuestSurfaces';
@@ -65,6 +66,7 @@ export interface ComposerFooterProps {
     onOpenAttachSheet: () => void;
     onToggleExpandedInput: () => void;
     onCyclePermissionMode: () => void;
+    onExitBtw: () => void;
     onPrimaryAction: () => void;
     onQueueMessage: () => void;
     onAbort: () => void;
@@ -116,6 +118,7 @@ export function ComposerFooter(props: ComposerFooterProps) {
         onOpenAttachSheet,
         onToggleExpandedInput,
         onCyclePermissionMode,
+        onExitBtw,
         onPrimaryAction,
         onQueueMessage,
         onAbort,
@@ -177,6 +180,13 @@ export function ComposerFooter(props: ComposerFooterProps) {
                                 footerIconButtonClass={footerIconButtonClass}
                                 iconSizeClass={iconSizeClass}
                             /> : null}
+                            <BtwToolbarButton
+                                sessionId={currentSessionId}
+                                footerIconButtonClass={footerIconButtonClass}
+                                iconSizeClass={iconSizeClass}
+                                onExitBtw={onExitBtw}
+                                isBtwActive={isBtw}
+                            />
                             {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                         </div>
                         <div className="flex items-center min-w-0 gap-x-1 justify-end">
@@ -258,6 +268,14 @@ export function ComposerFooter(props: ComposerFooterProps) {
                             iconSizeClass={iconSizeClass}
                             withTooltip
                         /> : null}
+                        <BtwToolbarButton
+                            sessionId={currentSessionId}
+                            footerIconButtonClass={footerIconButtonClass}
+                            iconSizeClass={iconSizeClass}
+                            withTooltip
+                            onExitBtw={onExitBtw}
+                            isBtwActive={isBtw}
+                        />
                         {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                     </div>
                     <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
