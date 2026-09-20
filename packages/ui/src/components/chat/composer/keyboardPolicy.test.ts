@@ -35,7 +35,6 @@ const enterPolicyCases: Array<[string, Partial<EnterKeyPolicyInput>, boolean]> =
         ['configured enabled Shift+Ctrl+Enter inserts a newline', { enterToSendConfigured: true, enterToSend: true, shiftKey: true, ctrlKey: true }, false],
         ['configured disabled Ctrl+Enter sends', { enterToSendConfigured: true, enterToSend: false, ctrlKey: true }, true],
         ['mobile default Ctrl+Enter sends', { isMobile: true, ctrlKey: true }, true],
-        ['configured enabled Shift+Ctrl+Enter inserts a newline', { enterToSendConfigured: true, enterToSend: true, shiftKey: true, ctrlKey: true }, false],
         ['expanded composer Enter inserts a newline when Enter-to-send is enabled', { isDesktopExpanded: true, enterToSendConfigured: true, enterToSend: true }, false],
         ['expanded composer Shift+Enter inserts a newline when Enter-to-send is disabled', { isDesktopExpanded: true, enterToSendConfigured: true, enterToSend: false, shiftKey: true }, false],
         ['expanded composer Ctrl+Enter sends despite Enter-to-send being disabled', { isDesktopExpanded: true, enterToSendConfigured: true, ctrlKey: true }, true],
