@@ -154,6 +154,10 @@ import {
     toProjectRelativeMentionPath,
     toServerFileUrl,
 } from './composer/attachments/filePaths';
+import {
+    INLINE_SERVER_ATTACHMENT_ID_PREFIX,
+    filterMissingInlineAttachments,
+} from './composer/attachments/inlineMentionAttachments';
 import { buildComposerContext, buildOutgoingMessage } from './composer/submit/buildOutgoingMessage';
 import {
     buildCommandVariables,
@@ -881,7 +885,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 continue;
             }
             attachments.push({
-                id: `inline-server-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                id: `${INLINE_SERVER_ATTACHMENT_ID_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
                 file: new File([], mention.filename, { type: 'text/plain' }),
                 filename: mention.filename,
                 mimeType: 'text/plain',
@@ -1837,6 +1841,22 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             };
         }
 
+        // #3898: inline @-mentions resolve to server paths without checking
+        // the file exists, and OpenCode 400s the whole prompt on a missing
+        // file. Drop the unresolvable ones with a warning and submit the rest;
+        // the prompt text itself is untouched. Filtered once here so every
+        // send path below (magic-prompt, btw fork, optimistic row, main send)
+        // carries the same list.
+        const { sendable: sendableAttachments, skippedNames: skippedAttachmentNames } = await filterMissingInlineAttachments(
+            primaryAttachments,
+            opencodeClient,
+        );
+        if (skippedAttachmentNames.length > 0) {
+            toast.warning(t('chat.chatInput.toast.skippedMissingAttachments', {
+                names: skippedAttachmentNames.join(', '),
+            }));
+        }
+
         // Clear input (the queue was taken above)
         if (!queuedOnly) {
             setMessage('');
@@ -1876,7 +1896,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         providerIdToSend,
                         modelIdToSend,
                         agentNameToSend,
-                        primaryAttachments,
+                        sendableAttachments,
                         agentMentionName,
                         [...additionalParts, { text: instructionsText, synthetic: true }],
                         variantToSend,
@@ -1932,7 +1952,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         // Collect all attachments for error recovery
         const allAttachments = [
-            ...primaryAttachments,
+            ...sendableAttachments,
             ...additionalParts.flatMap(p => p.attachments ?? []),
         ];
 
@@ -1961,7 +1981,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     modelID: modelIdToSend,
                     agent: agentNameToSend,
                     variant: variantToSend,
-                    attachments: primaryAttachments,
+                    attachments: sendableAttachments,
                     additionalParts,
                     skills: sendMessageOptions?.skills,
                     permissionAutoAccept: pendingBtwAutoAccept,
@@ -2000,7 +2020,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             providerIdToSend,
             modelIdToSend,
             agentNameToSend,
-            primaryAttachments,
+            sendableAttachments,
             agentMentionName,
             additionalParts.length > 0 ? additionalParts : undefined,
             variantToSend,
