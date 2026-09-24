@@ -77,6 +77,13 @@ describe('useMarkdownLocalAssets', () => {
     });
     expect(fetchCalls).toEqual([]);
 
+    // Regression guard for #3868: happy-dom held the mutation callback only
+    // weakly, so a collection between observe() and delivery silently dropped
+    // it. Forcing GC here makes that loss deterministic on unpatched builds.
+    const bunRuntime: unknown = globalThis;
+    // SAFETY: this suite runs under bun:test, where Bun.gc is always present.
+    (bunRuntime as { Bun: { gc: (force: boolean) => void } }).Bun.gc(true);
+
     // The markdown pipeline inserts the DOM later, the way the worker does.
     const image = document.createElement('img');
     image.setAttribute('src', './shots/a.png');

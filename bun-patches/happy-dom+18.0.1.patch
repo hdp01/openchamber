@@ -1,0 +1,58 @@
+diff --git a/lib/mutation-observer/MutationObserverListener.js b/lib/mutation-observer/MutationObserverListener.js
+@@ -8,6 +8,7 @@
+     #window;
+     #observer;
+     #callback;
++    #listenerCallback;
+     #records = [];
+     #destroyed = false;
+     #timeout = null;
+@@ -24,9 +25,10 @@
+     constructor(init) {
+         this.options = init.options;
+         this.target = init.target;
++        this.#listenerCallback = (record) => this.report(record);
+         this.mutationListener = {
+             options: init.options,
+-            callback: new WeakRef((record) => this.report(record))
++            callback: new WeakRef(this.#listenerCallback)
+         };
+         this.#window = init.window;
+         this.#observer = init.observer;
+@@ -83,6 +85,7 @@
+         this.#destroyed = true;
+         this.options = null;
+         this.target = null;
++        this.#listenerCallback = null;
+         this.mutationListener = null;
+         this.#window = null;
+         this.#observer = null;
+diff --git a/cjs/mutation-observer/MutationObserverListener.cjs b/cjs/mutation-observer/MutationObserverListener.cjs
+@@ -10,6 +10,7 @@
+     #window;
+     #observer;
+     #callback;
++    #listenerCallback;
+     #records = [];
+     #destroyed = false;
+     #timeout = null;
+@@ -26,9 +27,10 @@
+     constructor(init) {
+         this.options = init.options;
+         this.target = init.target;
++        this.#listenerCallback = (record) => this.report(record);
+         this.mutationListener = {
+             options: init.options,
+-            callback: new WeakRef((record) => this.report(record))
++            callback: new WeakRef(this.#listenerCallback)
+         };
+         this.#window = init.window;
+         this.#observer = init.observer;
+@@ -85,6 +87,7 @@
+         this.#destroyed = true;
+         this.options = null;
+         this.target = null;
++        this.#listenerCallback = null;
+         this.mutationListener = null;
+         this.#window = null;
+         this.#observer = null;
