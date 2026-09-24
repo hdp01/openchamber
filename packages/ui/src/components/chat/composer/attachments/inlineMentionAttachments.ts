@@ -1,3 +1,4 @@
+import { FilesystemError } from '@/lib/api/files-errors';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 
 /** Minimal surface of the directory listing used for existence checks. */
@@ -13,7 +14,11 @@ export interface DirectoryLister {
  */
 export const INLINE_SERVER_ATTACHMENT_ID_PREFIX = 'inline-server-';
 
-const normalizePath = (path: string): string => path.replace(/\\/g, '/').replace(/\/+/g, '/');
+const normalizePath = (path: string): string => {
+    const normalized = path.replace(/\\/g, '/').replace(/\/+/g, '/');
+    // `@src/` names the directory itself; its listing entry has no slash.
+    return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized;
+};
 
 const parentDirectoryOf = (path: string): string => {
     const normalized = normalizePath(path);
@@ -36,8 +41,9 @@ export interface FilteredInlineAttachments {
  * itself is untouched — only the phantom attachment is dropped, so the rest
  * still submits.
  *
- * Fail open: when the directory listing itself errors, every attachment is
- * kept rather than blocking the send on a check that could not run.
+ * Fail open per directory: when a listing errors for any reason other than
+ * the directory not existing, that directory's attachments are kept rather
+ * than blocking the send on a check that could not run.
  */
 type InlineServerAttachment = AttachedFile & { serverPath: string };
 
@@ -65,17 +71,33 @@ export async function filterMissingInlineAttachments(
         byDirectory.set(directory, group);
     }
 
-    const missing = new Set<AttachedFile>();
-    for (const [directory, files] of byDirectory) {
-        let entries;
+    // Directories are listed in parallel: on a remote or relayed connection
+    // each listing is a round-trip the send waits on.
+    const results = await Promise.all([...byDirectory].map(async ([directory, files]) => {
         try {
-            entries = await lister.listLocalDirectory(directory);
-        } catch {
-            return { sendable: [...attachments], skippedNames: [] };
+            return { files, entries: await lister.listLocalDirectory(directory) };
+        } catch (error) {
+            // A parent directory that does not exist (`@types/node`,
+            // `@acme.io/careers`) cannot hold the file. Any other failure
+            // keeps that directory's attachments: the check could not run.
+            const parentMissing = error instanceof FilesystemError
+                && (error.reason === 'not-found' || error.reason === 'not-directory');
+            return { files, entries: parentMissing ? [] : null };
         }
+    }));
+
+    const missing = new Set<AttachedFile>();
+    for (const { files, entries } of results) {
+        if (entries === null) continue;
         const present = new Set(entries.map((entry) => normalizePath(entry.path)));
+        // Case-insensitive fallback: macOS and Windows resolve `readme.md` to
+        // `README.md`, and VS Code reports a lowercase Windows drive letter.
+        // On a case-sensitive disk this keeps the attachment, which is the
+        // pre-check behaviour rather than a wrong drop.
+        const presentFolded = new Set([...present].map((path) => path.toLowerCase()));
         for (const file of files) {
-            if (!present.has(normalizePath(file.serverPath))) {
+            const target = normalizePath(file.serverPath);
+            if (!present.has(target) && !presentFolded.has(target.toLowerCase())) {
                 missing.add(file);
             }
         }

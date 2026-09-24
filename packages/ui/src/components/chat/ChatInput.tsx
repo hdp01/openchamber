@@ -1284,7 +1284,19 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
         const { sanitizedText, mention } = parseAgentMentions(messageToQueue, agents);
-        const { attachments: mentionAttachments } = extractInlineFileMentions(sanitizedText, documentMentions.prepared);
+        const { attachments: extractedMentionAttachments } = extractInlineFileMentions(sanitizedText, documentMentions.prepared);
+        // #3898: a queued message is delivered later without the composer, so
+        // a phantom mention (`@masha.conner`) must be dropped now or the
+        // delivery 400s.
+        const { sendable: mentionAttachments, skippedNames: skippedMentionNames } = await filterMissingInlineAttachments(
+            extractedMentionAttachments,
+            opencodeClient,
+        );
+        if (skippedMentionNames.length > 0) {
+            toast.warning(t('chat.chatInput.toast.skippedMissingAttachments', {
+                names: skippedMentionNames.join(', '),
+            }));
+        }
         const availableSkillNames = new Set(
             selectSkillsForDirectory(useSkillsStore.getState(), currentDirectory).map((skill) => skill.name),
         );

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { FilesystemError } from '@/lib/api/files-errors';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 
 import {
@@ -89,6 +90,54 @@ describe('filterMissingInlineAttachments', () => {
         const result = await filterMissingInlineAttachments(files, lister({}, calls, true));
 
         expect(result.sendable).toEqual(files);
+        expect(result.skippedNames).toEqual([]);
+    });
+
+    test('drops mentions whose parent directory does not exist and keeps checking the rest', async () => {
+        const scoped = inlineFile('1', '/repo/types/node', 'node');
+        const real = inlineFile('2', '/repo/real.txt', 'real.txt');
+        const directoryLister: DirectoryLister = {
+            listLocalDirectory: async (directory: string) => {
+                if (directory === '/repo/types') {
+                    throw new FilesystemError('Directory not found', { reason: 'not-found', status: 404 });
+                }
+                return [{ path: '/repo/real.txt' }];
+            },
+        };
+
+        const result = await filterMissingInlineAttachments([scoped, real], directoryLister);
+
+        expect(result.sendable).toEqual([real]);
+        expect(result.skippedNames).toEqual(['node']);
+    });
+
+    test('a failing listing keeps only its own directory unchecked', async () => {
+        const unchecked = inlineFile('1', '/locked/file.txt', 'file.txt');
+        const phantom = inlineFile('2', '/repo/masha.conner', 'masha.conner');
+        const directoryLister: DirectoryLister = {
+            listLocalDirectory: async (directory: string) => {
+                if (directory === '/locked') throw new Error('permission denied');
+                return [];
+            },
+        };
+
+        const result = await filterMissingInlineAttachments([unchecked, phantom], directoryLister);
+
+        expect(result.sendable).toEqual([unchecked]);
+        expect(result.skippedNames).toEqual(['masha.conner']);
+    });
+
+    test('matches directories and paths that differ only in case', async () => {
+        const calls: string[] = [];
+        const directory = inlineFile('1', '/repo/src/', 'src');
+        const readme = inlineFile('2', '/repo/readme.md', 'readme.md');
+
+        const result = await filterMissingInlineAttachments(
+            [directory, readme],
+            lister({ '/repo': ['/repo/src', '/repo/README.md'] }, calls),
+        );
+
+        expect(result.sendable).toEqual([directory, readme]);
         expect(result.skippedNames).toEqual([]);
     });
 });
