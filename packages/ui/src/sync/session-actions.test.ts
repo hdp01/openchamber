@@ -76,6 +76,7 @@ mock.module("@/lib/opencode/client", () => ({
       replyCalls.push({ method: "session.create", params: { ...params, directory } })
       return sessionRecords.get("created") ?? ({ id: "created" } as Session)
     }),
+    getSdkClient: () => undefined,
     deleteSession: mock(async (sessionId: string, directory?: string | null) => {
       replyCalls.push({ method: "session.delete", params: { sessionID: sessionId, directory } })
       // Lets a test switch runtime while the delete is in flight, so the action
@@ -186,6 +187,7 @@ mock.module("./session-ui-store", () => ({
       setSessionDirectory: (sessionID: string, directory: string) => {
         movedSessionDirectories.push({ sessionID, directory })
       },
+      markSessionAsOpenChamberCreated: () => {},
     }),
   },
 }))
@@ -295,6 +297,7 @@ mock.module("./session-message-loader", () => ({
     invalidateSession: () => {},
     ensure: async () => {},
     refreshTail: async () => {},
+    initializeCreatedSession: () => {},
     getSnapshot: () => ({ status: "ready" as const }),
   }),
 }))
@@ -371,6 +374,21 @@ mock.module("./sync-refs", () => ({
   registerSessionDirectory: (sessionID: string, directory: string) => {
     registeredSessionDirectories.push({ sessionID, directory })
   },
+}))
+
+let resolveRootImpl: (directory: string) => Promise<string> = async (directory) => directory
+mock.module("@/lib/worktrees/worktreeStatus", () => ({
+  resolveProjectRoot: (directory: string) => resolveRootImpl(directory),
+  preferOnDiskDirectoryCase: (requested: string, resolved: string) => {
+    if (!/^(?:[A-Za-z]:\/|\/\/)/.test(requested)) return requested
+    return resolved !== requested && resolved.toLowerCase() === requested.toLowerCase()
+      ? resolved
+      : requested
+  },
+  getRootBranch: async () => "HEAD",
+  getWorktreeStatus: async () => "ready",
+  canDeleteWorktreeWithoutConfirm: () => false,
+  invalidateResolvedProjectRootCache: () => {},
 }))
 
 import { INITIAL_STATE } from "./types"
@@ -3126,3 +3144,45 @@ describe("setSessionWorkState", () => {
     expect(globalUpsertedSessions).toHaveLength(0)
   })
 });
+
+describe("createSession directory casing", () => {
+  beforeEach(() => {
+    replyCalls.length = 0
+    registeredSessionDirectories.length = 0
+    globalUpsertedSessions.length = 0
+    resolveRootImpl = async (directory) => directory
+  })
+
+  test("sends the on-disk casing when the git root differs only by case (#4314)", async () => {
+    const source = createStore({})
+    const { createSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(createChildStores([["C:/W/tutor", source]]), () => "C:/W/tutor")
+    resolveRootImpl = async () => "C:/W/tutor"
+
+    const session = await createSession("title", "C:/w/tutor")
+
+    expect(session?.id).toBe("created")
+    expect(replyCalls.filter((call) => call.method === "session.create")).toEqual([{
+      method: "session.create",
+      params: {
+        title: "title",
+        metadata: undefined,
+        model: undefined,
+        agent: undefined,
+        directory: "C:/W/tutor",
+      },
+    }])
+  })
+
+  test("keeps the requested directory when casing already matches", async () => {
+    const source = createStore({})
+    const { createSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(createChildStores([["C:/W/tutor", source]]), () => "C:/W/tutor")
+    resolveRootImpl = async () => "C:/W/tutor"
+
+    await createSession("title", "C:/W/tutor")
+
+    expect(replyCalls.filter((call) => call.method === "session.create")[0]?.params.directory)
+      .toBe("C:/W/tutor")
+  })
+})

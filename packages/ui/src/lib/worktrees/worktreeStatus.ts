@@ -152,3 +152,33 @@ export async function getRootBranch(
     return 'HEAD';
   }
 }
+
+/**
+ * Prefer the on-disk letter casing for a session directory.
+ *
+ * Project paths stored with different letter case than the filesystem
+ * (Windows, where `C:\w\tutor` and `C:\W\tutor` are the same directory)
+ * make OpenCode's instruction discovery reject the session outright. When
+ * the git-resolved project root names the same directory apart from letter
+ * case, the resolved form must win; anything else (subdirectories, different
+ * locations) keeps the requested path untouched.
+ *
+ * The rewrite is limited to Windows-style paths (drive-letter or UNC): on
+ * case-sensitive filesystems two paths differing only by case are different
+ * directories and must never be merged. See openchamber/openchamber#4314.
+ */
+export const preferOnDiskDirectoryCase = (
+  requestedDirectory: string,
+  resolvedRoot: string,
+): string => {
+  if (!/^(?:[A-Za-z]:\/|\/\/)/.test(requestedDirectory)) {
+    return requestedDirectory;
+  }
+  if (
+    resolvedRoot !== requestedDirectory &&
+    resolvedRoot.toLowerCase() === requestedDirectory.toLowerCase()
+  ) {
+    return resolvedRoot;
+  }
+  return requestedDirectory;
+};

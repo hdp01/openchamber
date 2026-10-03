@@ -20,7 +20,7 @@ mock.module('@/lib/gitApi', () => ({
   },
 }));
 
-const { canDeleteWorktreeWithoutConfirm, getRootBranch, invalidateResolvedProjectRootCache } = await import('./worktreeStatus');
+const { canDeleteWorktreeWithoutConfirm, getRootBranch, invalidateResolvedProjectRootCache, preferOnDiskDirectoryCase } = await import('./worktreeStatus');
 
 describe('worktreeStatus.canDeleteWorktreeWithoutConfirm', () => {
   test('allows only a clean worktree whose upstream has every commit', () => {
@@ -148,5 +148,28 @@ describe('worktreeStatus.getRootBranch', () => {
     expect(await getRootBranch('/repo', { knownBranch: 'develop' })).toBe('develop');
     // No git status round-trip needed in the fast path.
     expect(statusCalls).toEqual([]);
+  });
+});
+
+describe('worktreeStatus.preferOnDiskDirectoryCase', () => {
+  test('keeps the requested path when casing already matches', () => {
+    expect(preferOnDiskDirectoryCase('C:/W/tutor', 'C:/W/tutor')).toBe('C:/W/tutor');
+  });
+
+  test('prefers the resolved root when only letter case differs (#4314)', () => {
+    expect(preferOnDiskDirectoryCase('C:/w/tutor', 'C:/W/tutor')).toBe('C:/W/tutor');
+    expect(preferOnDiskDirectoryCase('c:/w/TUTOR', 'C:/W/tutor')).toBe('C:/W/tutor');
+    expect(preferOnDiskDirectoryCase('//srv/share', '//SRV/share')).toBe('//SRV/share');
+  });
+
+  test('keeps subdirectories and different locations untouched', () => {
+    expect(preferOnDiskDirectoryCase('C:/W/tutor/sub', 'C:/W/tutor')).toBe('C:/W/tutor/sub');
+    expect(preferOnDiskDirectoryCase('C:/other', 'C:/W/tutor')).toBe('C:/other');
+    expect(preferOnDiskDirectoryCase('/repo', '/other')).toBe('/repo');
+  });
+
+  test('never merges case-differing paths on case-sensitive filesystems', () => {
+    expect(preferOnDiskDirectoryCase('/REPO', '/repo')).toBe('/REPO');
+    expect(preferOnDiskDirectoryCase('/repo/sub', '/REPO')).toBe('/repo/sub');
   });
 });

@@ -54,6 +54,27 @@ import { applyForkInheritance } from "@/lib/sessionForkInheritance"
 import { getSessionGoal } from "@/lib/sessionGoalMetadata"
 import { fetchGoalObjectiveContent, writeGoalObjectiveFile } from "@/lib/goalObjectiveFiles"
 
+/**
+ * Resolve a session directory to its on-disk letter casing.
+ *
+ * Dynamically imported to avoid a module-load cycle. Any failure keeps the
+ * requested directory, so offline and non-Windows behavior is unchanged.
+ * See openchamber/openchamber#4314.
+ */
+const resolveSessionDirectoryOnDiskCase = async (
+  directory: string | null | undefined,
+): Promise<string | null | undefined> => {
+  if (!directory) return directory
+  try {
+    const { preferOnDiskDirectoryCase, resolveProjectRoot } = await import(
+      "@/lib/worktrees/worktreeStatus"
+    )
+    return preferOnDiskDirectoryCase(directory, await resolveProjectRoot(directory))
+  } catch {
+    return directory
+  }
+}
+
 const MESSAGE_REFETCH_LIMIT = 100
 const SEND_CONFIRMATION_REFETCH_LIMIT = 30
 // A relay-tunnel send fails when the tunnel drops, and the confirming refetch
@@ -955,7 +976,12 @@ export async function createSession(
     // Without this, setCurrentSession would fall through to a stale
     // opencodeClient.getDirectory() value and group the session under the
     // wrong project (closes #1637, #2270).
-    const effectiveDirectory = directoryOverride ?? dir()
+    // Stored project paths can differ in letter case from the on-disk path
+    // (Windows), which makes OpenCode reject the session during instruction
+    // discovery. Prefer the git-resolved on-disk casing when it names the
+    // same directory; every caller (drafts, guests, Linear) flows through
+    // here. See openchamber/openchamber#4314.
+    const effectiveDirectory = await resolveSessionDirectoryOnDiskCase(directoryOverride ?? dir())
     const session = await opencodeClient.createSession(
       { title, metadata, model: selection?.model, agent: selection?.agent },
       effectiveDirectory,
